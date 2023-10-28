@@ -20,7 +20,7 @@ class BlackJackGame:
         self.deck = DeckCreator()
 
         self.player_cards = [[]] * num_players
-        self.player_hand_value = [] * num_players
+        self.player_hand_value = [0] * num_players
 
         self.dealer_cards = []
         
@@ -42,6 +42,8 @@ class BlackJackGame:
             self.player_cards[i].append(self.deck.pop())
             self.player_cards[i].append(self.deck.pop())
             
+            self.player_hand_value[i] = self.HandEvaluation(i)
+            
         self.dealer_cards = []
         self.dealer_cards.append(self.deck.pop())
         self.dealer_cards.append(self.deck.pop())
@@ -59,7 +61,8 @@ class BlackJackGame:
             else:
                 num_aces += 1
 
-        for i in range(num_aces):
+        if num_aces > 0:
+            value += (num_aces - 1)
             if (value + 11) <= 21:
                 value += 11
             else:
@@ -69,6 +72,7 @@ class BlackJackGame:
 
     def Hit(self):
         self.player_cards[self.current_player].append(self.deck.pop())
+        self.player_hand_value[self.current_player] = self.HandEvaluation(self.current_player)
 
     def Stand(self):
         self.current_player += 1
@@ -95,14 +99,27 @@ class BlackJackGame:
     def DisplayCurrentGameState(self, revealDealerCards):
         print("##################################")
         print("Turn", self.current_turn)
-        print("Dealer Cards :", self.DisplayCard(-1, 1), "| ?") # Hidden card is 0 index, revealed card is 1 index
+        
+        # Determine whether all dealer cards are revealed, and displays the known cards
+        if revealDealerCards:
+            dealer_string = "Dealer Cards: "
+            for c in range(len(self.dealer_cards)):
+                dealer_string += self.DisplayCard(-1, c)
+                if c < len(self.dealer_cards) - 1:
+                    dealer_string += " | "
+            print(dealer_string)
+        else:
+            print("Dealer Cards :", self.DisplayCard(-1, 0), "| ?") # Hidden card is 0 index, revealed card is 1 index
 
+        # Prints out each players card, money, and hand value
         for p in range(len(self.player_cards)):
             player_string = "Player " + str(p + 1) + " Cards: "
             for c in range(len(self.player_cards[p])):
                 player_string += self.DisplayCard(p, c) + " | "
 
-            player_string += "$" + str(self.player_money[p])
+            player_string += "$" + str(self.player_money[p]) + " | "
+            player_string += "Bet Amount: $" + str(self.player_bets[p]) + " | "
+            player_string += "Hand Value: " + str(self.player_hand_value[p])
             print(player_string)
 
     def PlayBlackJack(self):
@@ -111,7 +128,8 @@ class BlackJackGame:
             self.NextTurn()
             
             # Print out game configuration
-            self.DisplayCurrentGameState()
+            self.DisplayCurrentGameState(True)
+            self.DisplayCurrentGameState(False)
             
             # Allow all players to bet
             for p in range(len(self.player_bets)):
@@ -125,7 +143,7 @@ class BlackJackGame:
 
             # Allow all players to hit or stand
             while True:
-                self.DisplayCurrentGameState()
+                self.DisplayCurrentGameState(False)
 
                 curr_input = input("Player " + str(self.current_player + 1) + "'s turn: ").upper()
 
