@@ -30,9 +30,11 @@ class BlackJackGame:
         self.current_player = 0
         self.current_turn = 0
 
+    # Creates a new deck with every card to simulate a reset of the deck
     def Shuffle(self):
         self.deck = DeckCreator()
 
+    # Goes to the next turn, shuffles the deck, resets bets and gives every player and the dealer two cards
     def NextTurn(self):
         self.current_turn += 1
         self.Shuffle()
@@ -43,16 +45,25 @@ class BlackJackGame:
             self.player_cards[i].append(self.deck.pop())
             
             self.player_hand_value[i] = self.HandEvaluation(i)
+
+            self.player_bets[i] = 0
             
         self.dealer_cards = []
         self.dealer_cards.append(self.deck.pop())
         self.dealer_cards.append(self.deck.pop())
 
+    # Evaluates how many points a player's hand is worth (use -1 for dealer)
     def HandEvaluation(self, player):
         value = 0
         num_aces = 0
+        hand = []
 
-        for card in self.player_cards[player]:
+        if player == -1:
+            hand = self.dealer_cards
+        else:
+            hand = self.player_cards[player]
+
+        for card in hand:
             card_num = card[1]
             if type(card_num) == int:
                 value += card_num
@@ -70,13 +81,16 @@ class BlackJackGame:
 
         return value
 
+    # Gives a player a new card
     def Hit(self):
         self.player_cards[self.current_player].append(self.deck.pop())
         self.player_hand_value[self.current_player] = self.HandEvaluation(self.current_player)
 
+    # Passes to the next player
     def Stand(self):
         self.current_player += 1
 
+    # Player bets an amount of money. Return false if a player doesn't have enough money for a bet
     def Bet(self, amount, player):
         curr_money = self.player_money[player] - amount
 
@@ -87,6 +101,7 @@ class BlackJackGame:
         else:
             return False
 
+    # Returns a string of a specific card in a player's deck (use -1 for dealer)
     def DisplayCard(self, player_num, card_num):
         card_name = ""
         if player_num == -1:
@@ -96,6 +111,7 @@ class BlackJackGame:
 
         return card_name
 
+    # Displays the current state of the game. Must input whether the dealer's cards should be revealed
     def DisplayCurrentGameState(self, revealDealerCards):
         print("##################################")
         print("Turn", self.current_turn)
@@ -122,6 +138,7 @@ class BlackJackGame:
             player_string += "Hand Value: " + str(self.player_hand_value[p])
             print(player_string)
 
+    # Function for playing the game of blackjack
     def PlayBlackJack(self):
         while True:
             # Go to next turn to initial configuration
