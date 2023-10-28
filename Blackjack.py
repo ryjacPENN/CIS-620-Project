@@ -81,10 +81,13 @@ class BlackJackGame:
 
         return value
 
-    # Gives a player a new card
-    def Hit(self):
-        self.player_cards[self.current_player].append(self.deck.pop())
-        self.player_hand_value[self.current_player] = self.HandEvaluation(self.current_player)
+    # Gives a player a new card (use -1 for dealer)
+    def Hit(self, player):
+        if player == -1:
+            self.dealer_cards.append(self.deck.pop())
+        else:
+            self.player_cards[player].append(self.deck.pop())
+            self.player_hand_value[player] = self.HandEvaluation(player)
 
     # Passes to the next player
     def Stand(self):
@@ -120,9 +123,9 @@ class BlackJackGame:
         if revealDealerCards:
             dealer_string = "Dealer Cards: "
             for c in range(len(self.dealer_cards)):
-                dealer_string += self.DisplayCard(-1, c)
-                if c < len(self.dealer_cards) - 1:
-                    dealer_string += " | "
+                dealer_string += self.DisplayCard(-1, c) + " | "
+
+            dealer_string += "Hand Value: " + str(self.HandEvaluation(-1))
             print(dealer_string)
         else:
             print("Dealer Cards :", self.DisplayCard(-1, 0), "| ?") # Hidden card is 0 index, revealed card is 1 index
@@ -136,7 +139,15 @@ class BlackJackGame:
             player_string += "$" + str(self.player_money[p]) + " | "
             player_string += "Bet Amount: $" + str(self.player_bets[p]) + " | "
             player_string += "Hand Value: " + str(self.player_hand_value[p])
+
             print(player_string)
+
+    # Determines what a dealer will do given their hand (Always hits below 17 and stands at or above 17)
+    def DealerLogic(self):
+        curr_hand = self.HandEvaluation(-1)
+        while curr_hand < 17:
+            self.Hit(-1)
+            curr_hand = self.HandEvaluation(-1)
 
     # Function for playing the game of blackjack
     def PlayBlackJack(self):
@@ -145,7 +156,6 @@ class BlackJackGame:
             self.NextTurn()
             
             # Print out game configuration
-            self.DisplayCurrentGameState(True)
             self.DisplayCurrentGameState(False)
             
             # Allow all players to bet
@@ -165,18 +175,47 @@ class BlackJackGame:
                 curr_input = input("Player " + str(self.current_player + 1) + "'s turn: ").upper()
 
                 if curr_input == "HIT":
-                    self.Hit()
+                    self.Hit(self.current_player)
                 elif curr_input == "STAND":
                     self.Stand()
                 elif curr_input == "END":
                     print("END")
                     return True
+                else:
+                    print("INVALID COMMAND")
                 
-                if self.current_player > len(self.player_cards):
+                # If a player busts, go to next player's turn and that player loses their bet value
+                if self.current_player < len(self.player_cards) and self.player_hand_value[self.current_player] > 21:
+                    self.player_bets[self.current_player] = 0
+                    self.current_player += 1
+
+                # If all out of players, go to dealer's turn
+                if self.current_player >= len(self.player_cards):
                     break
-
             
+            # Runs dealer behavior
+            self.DealerLogic()
+            dealer_value = self.HandEvaluation(-1)
+
+            # Look at each player's hands and determines whether they win or not
+            for p in range(len(self.player_cards)):
+                if dealer_value > 21:
+                    self.player_money[p] += self.player_bets[p] * 2
+                elif self.player_hand_value[p] > dealer_value:
+                    self.player_money[p] += self.player_bets[p] * 2
+                elif self.player_hand_value[p] == dealer_value:
+                    self.player_money[p] += self.player_bets[p]
+            
+            self.DisplayCurrentGameState(True)
+
+            curr_input = input("Next Hand (Y/N)? ").upper()
+            if (curr_input == "Y"):
+                continue
+            else:
+                print("END")
+                return True
 
 
+# Starts a game with two players and $100
 game = BlackJackGame(2, 100)
 game.PlayBlackJack()
