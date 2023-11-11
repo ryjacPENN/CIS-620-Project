@@ -41,7 +41,7 @@ class BlackJackGame:
 
     def dealerdraw(self):
         self.dealer_hand_value = self.HandEvaluation(-1)
-        if self.dealer_hand_value < 17:
+        while self.dealer_hand_value < 17:
             self.dealer_cards.append(self.deck.pop())
             self.dealer_hand_value = self.HandEvaluation(-1)
         if self.dealer_hand_value > 21:
@@ -62,6 +62,28 @@ class BlackJackGame:
             hand = self.dealer_cards
         else:
             hand = self.player_cards
+        for card in hand:
+            card_num = card[0]
+            if card_num == "J" or card_num == "Q" or card_num == "K":
+                value += 10
+            elif card_num != "A":
+                value += int(card_num)
+            else:
+                num_aces += 1
+
+        if num_aces > 0:
+            value += num_aces - 1
+            if (value + 11) <= 21:
+                value += 11
+            else:
+                value += 1
+
+        return value
+
+    def HandEvaluation2(self, hand):
+        value = 0
+        num_aces = 0
+
         for card in hand:
             card_num = card[0]
             if card_num == "J" or card_num == "Q" or card_num == "K":
@@ -139,27 +161,28 @@ class BJTrainer:
         for i in range(iterations):
             """Shuffle cards. and give two cards to player and dealer"""
             game.initial()
-            util += self.cfr(game, "", 1)
+            util += self.cfr(game, "", 1, game.player_cards.copy())
 
         # for n in self.nodeMap.values():
         #     print(n)
 
-        with open("output_file", "w") as file:
+        with open("output_file1", "w") as file:
             for n in self.nodeMap.values():
                 file.write(str(n) + "\n")
 
         print(f"Average game value: {util / iterations}")
 
-    def cfr(self, game: BlackJackGame, history: str, p0: float) -> float:
+    def cfr(
+        self, game: BlackJackGame, history: str, p0: float, playercardlist: list
+    ) -> float:
         """Counterfactual regret minimization iteration."""
-        playersum = game.HandEvaluation(1)
-        if playersum > 21:
-            return -1
+        playersum = game.HandEvaluation2(playercardlist)
+
         # player =1 is the dealer, player =0 is the player, deck[0] is the unknown card, deck[1:3] is the known card
-        if history == "":
-            infoSet: str = f"{game.dealer_cards[1][0]} {game.player_cards[0][0]} {game.player_cards[1][0]} {playersum} {history}"
-        else:
-            infoSet: str = f"{game.dealer_cards[1][0]} {game.player_cards[0][0]} {game.player_cards[1][0]} {playersum} {history[0]}"
+        # if history == "":
+        infoSet: str = f"{game.dealer_cards[1][0]} {playersum} "
+        # else:
+        #     infoSet: str = f"{game.dealer_cards[1][0]} {game.player_cards[0][0]} {game.player_cards[1][0]} {playersum} {history}"
 
         """Return payoff for terminal states. """
         """player has black jack, if dealer has black jack, return 0, else return 1"""
@@ -180,53 +203,36 @@ class BJTrainer:
                     and game.dealer_cards[0][0] in ["A"]
                 )
             ):
+                print("player bj")
                 return 1
             else:
+                print("tie")
                 return 0
 
-        if game.dealer_cards[1][0] in ["A"] and len(history) == 1:
-            """If the dealer's open card is an ace
-            then the player may consider buying insurance or not.
-            Insurance is half of the stake and is non-refundable.
-            If the dealer's concealed card is a 10-point card
-            then this card is turned over
-            The player who buys insurance gets 1x the bet
-            If the dealer doesn't have a Black Jack, the hand stays dark.
-            Players continue to play"""
-            if history == "I":
-                if game.dealer_cards[0][0] in ["K", "Q", "J"]:
-                    return 0.5
-            """without insurance"""
-            if history != "I":
-                if game.dealer_cards[0][0] in ["K", "Q", "J"]:
-                    return -1
-
-        if game.dealer_cards[0][0] in ["A"] and game.dealer_cards[1][0] in [
-            "K",
-            "Q",
-            "J",
-        ]:
-            """dealer has BJ"""
+        if (
+            game.dealer_cards[0][0] in ["K", "Q", "J"]
+            and game.dealer_cards[1][0] in ["A"]
+        ) or (
+            game.dealer_cards[0][0] in ["A"]
+            and game.dealer_cards[1][0] in ["K", "Q", "J"]
+        ):
+            print("dealer bj")
             return -1
 
-        # if playersum > 21:
-        #     return -1
+        if playersum > 21:
+            print("boom", playersum, history)
+            return -1
 
         if len(history) > 0 and history[-1] == "P":
             """compare the sum of player and dealer"""
             dealersum = game.dealerdraw()
+            print("dealer sum:", dealersum, "player sum:", playersum, history)
             if playersum > dealersum:
-                if history[0] == "I":
-                    return 0.5
-                else:
-                    return 1
+                return 1
             elif playersum == dealersum:
                 return 0
             else:
-                if history[0] == "I":
-                    return -1.5
-                else:
-                    return -1
+                return -1
 
         """Get information set node or create it if nonexistant. """
         node = self.nodeMap.get(infoSet)
@@ -243,29 +249,35 @@ class BJTrainer:
         strategy: float = node.getStrategy(p0)
         util: float = np.zeros(self.NUM_ACTIONS, dtype=float)
         nodeUtil: float = 0
-        if len(history) == 0:
-            if game.dealer_cards[1][0] in ["A"]:
-                for a in range(self.NUM_ACTIONS):
-                    nextHistory = history + ("I" if a == 0 else "U")
-                    util[a] = -self.cfr(game, nextHistory, p0 * strategy[a])
-                    nodeUtil += strategy[a] * util[a]
-            else:
-                history = "U"
-                for a in range(self.NUM_ACTIONS):
-                    nextHistory = history + ("D" if a == 0 else "P")
-                    if a == 0:
-                        game.player_cards.append(game.deck.pop())
-                    util[a] = -self.cfr(game, nextHistory, p0 * strategy[a])
-                    nodeUtil += strategy[a] * util[a]
+        # if len(history) == 0:
+        #     if game.dealer_cards[1][0] in ["A"]:
+        #         for a in range(self.NUM_ACTIONS):
+        #             nextHistory = history + ("I" if a == 0 else "U")
+        #             util[a] = -self.cfr(game, nextHistory, p0 * strategy[a])
+        #             nodeUtil += strategy[a] * util[a]
+        #     else:
+        #         history = "U"
+        #         for a in range(self.NUM_ACTIONS):
+        #             nextHistory = history + ("D" if a == 0 else "P")
+        #             if a == 0:
+        #                 game.player_cards.append(game.deck.pop())
+        #             util[a] = -self.cfr(game, nextHistory, p0 * strategy[a])
+        #             nodeUtil += strategy[a] * util[a]
 
-        else:
-            for a in range(self.NUM_ACTIONS):
-                nextHistory = history + ("D" if a == 0 else "P")
-                if a == 0:
-                    game.player_cards.append(game.deck.pop())
-                util[a] = -self.cfr(game, nextHistory, p0 * strategy[a])
+        # else:
+        for a in [0, 1]:
+            nextHistory = history + ("D" if a == 0 else "P")
+            # print(nextHistory)
+
+            if a == 0:
+                pcardlist = playercardlist.copy()
+                pcardlist.append(game.deck.pop())
+                util[a] = -self.cfr(game, nextHistory, p0 * strategy[a], pcardlist)
                 nodeUtil += strategy[a] * util[a]
-
+            else:
+                pcardlist1 = playercardlist.copy()
+                util[a] = -self.cfr(game, nextHistory, p0 * strategy[a], pcardlist1)
+                nodeUtil += strategy[a] * util[a]
         """For each action, compute and accumulate counterfactual regret. """
         for a in range(self.NUM_ACTIONS):
             regret: float = util[a] - nodeUtil
@@ -276,7 +288,7 @@ class BJTrainer:
 
 
 def main():
-    iterations: int = 100000000
+    iterations: int = 10000
     trainer: BJTrainer = BJTrainer()
     trainer.train(iterations)
 
