@@ -64,8 +64,8 @@ class BlackJackGame:
         num_aces = 0
 
         for card in hand:
-            card_num = card[0]
-            if card_num == "J" or card_num == "Q" or card_num == "K":
+            card_num = card[:-1]
+            if card_num in {"J", "Q", "K"}:
                 value += 10
             elif card_num != "A":
                 value += int(card_num)
@@ -140,7 +140,7 @@ class BJTrainer:
         for i in tqdm(range(iterations)):
             """Shuffle cards. and give two cards to player and dealer"""
             game.initial()
-            util += self.cfr(game, "", 1, game.player_cards.copy())
+            util += self.cfr(game, f"({game.player_cards[0][:-1]})({game.player_cards[1][:-1]})", 1, game.player_cards.copy())
 
         with open("output_file", "w") as file:
             for n in self.nodeMap.values():
@@ -153,7 +153,9 @@ class BJTrainer:
         playersum = game.HandEvaluation2(playercardlist)
 
         # player =1 is the dealer, player =0 is the player, deck[0] is the unknown card, deck[1:3] is the known card
-        info_set: str = f"{game.dealer_cards[1][:-1]} {playersum}"
+        dealer_open_value = game.dealer_cards[1][:-1]
+        dealer_open_value = "10" if dealer_open_value in {"J", "Q", "K"} else dealer_open_value
+        info_set: str = f"{dealer_open_value} {playersum}"
 
         """Return payoff for terminal states. """
         """player has black jack, if dealer has black jack, return 0, else return 1"""
@@ -161,33 +163,33 @@ class BJTrainer:
                 or game.player_cards[0][:-1] == "A" and game.player_cards[1][:-1] in {"10", "K", "Q", "J"}):
             if (game.dealer_cards[1][:-1] == "A" and game.dealer_cards[0][:-1] in {"10", "K", "Q", "J"}
                     or game.dealer_cards[1][:-1] in {"10", "K", "Q", "J"} and game.dealer_cards[0][:-1] == "A"):
-                # print("push")
+                print("push")
                 return 0
             else:
-                # print("player bj")
+                print("player bj")
                 return 1
 
         if (game.dealer_cards[1][:-1] == "A" and game.dealer_cards[0][:-1] in {"10", "K", "Q", "J"}
             or game.dealer_cards[1][:-1] in {"10", "K", "Q", "J"} and game.dealer_cards[0][:-1] == "A"):
             """dealer has BJ"""
-            # print("dealer bj")
+            print("dealer bj")
             return -1
 
         if playersum > 21:
-            # print("busted", playersum, history)
+            print("busted", playersum, history)
             return -1
 
         if len(history) > 0 and history[-1] == "P":
             """compare the sum of player and dealer"""
             dealersum = game.dealerdraw()
             if playersum > dealersum:
-                # print("player win", playersum, history, dealersum)
+                print("player win", playersum, history, dealersum)
                 return 1
             elif playersum == dealersum:
-                # print("push", playersum, history, dealersum)
+                print("push", playersum, history, dealersum)
                 return 0
             else:
-                # print("player lose", playersum, history, dealersum)
+                print("player lose", playersum, history, dealersum)
                 return -1
 
         """Get information set node or create it if nonexistant. """
@@ -209,6 +211,7 @@ class BJTrainer:
             pcardlist = playercardlist.copy()
             if a == 0:
                 pcardlist.append(game.deck.pop())
+                next_history += f"({pcardlist[-1][:-1]})"
             util[a] = -self.cfr(game, next_history, float(p0 * strategy[a]), pcardlist)
             node_util += strategy[a] * util[a]
 
