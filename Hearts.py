@@ -53,7 +53,7 @@ class HeartsGame:
             return False
 
     def EvaluatePile(self):
-        winning_player = None
+        winning_player = 0
         winning_value = 0
         pile_value = 0
 
@@ -157,7 +157,7 @@ class BJTrainer:
         for i in range(iterations):
             """Shuffle cards. and give two cards to player and dealer"""
             game.NewHand()
-            util += self.cfr(game, "", 1, game.player_cards.copy())
+            util += self.cfr(game, "", 1, 1, 1, 1)
 
         with open("output_file1", "w") as file:
             for n in self.nodeMap.values():
@@ -165,31 +165,23 @@ class BJTrainer:
 
         print(f"Average game value: {util / iterations}")
 
-    def cfr(
-        self, game: HeartsGame, history: str, p0: float, playercardlist: list
-    ) -> float:
+    def cfr(self, game: HeartsGame, history: str, p0: float, p1: float, p2: float, p3: float) -> float:
         """Counterfactual regret minimization iteration."""
-        gaining_player, pile_value = game.EvalutatePile()
-
-        # player =1 is the dealer, player =0 is the player, deck[0] is the unknown card, deck[1:3] is the known card
-        # if history == "":
-        infoSet: str = f"{gaining_player} {pile_value} "
-        # else:
-        #     infoSet: str = f"{game.dealer_cards[1][0]} {game.player_cards[0][0]} {game.player_cards[1][0]} {playersum} {history}"
+        num_rounds = len(history)
+        player = num_rounds % 4
 
         """Return payoff for terminal states. """
-        """player has black jack, if dealer has black jack, return 0, else return 1"""
-        
-        return (16 - pile_value) / 16
 
+        if num_rounds >= 4:
+            gaining_player, pile_value = game.EvaluatePile()
+            return (16 - pile_value) / 16
+
+        infoSet: str = f"{game.player_cards[player]} {history} "
 
         """Get information set node or create it if nonexistant. """
         node = self.nodeMap.get(infoSet)
+
         if node is None:
-            # # if we just start the game, and the known card of dealer is A/K/Q/J, we can buy insurance
-            # if history == "" and game.dealer_cards[1][0] in ["A", "K", "Q", "J"]:
-            #     node = self.Node(True)
-            # else:
             node = self.Node()
             node.infoSet = infoSet
             self.nodeMap[infoSet] = node
@@ -199,19 +191,21 @@ class BJTrainer:
         strategy: float = node.getStrategy(p0)
         util: float = np.zeros(self.NUM_ACTIONS, dtype=float)
         nodeUtil: float = 0
-        for a in [0, 1]:
-            nextHistory = history + ("D" if a == 0 else "P")
-            # print(nextHistory)
+        for a in range(self.NUM_ACTIONS):
+            nextHistory = history + ("p" if a == 0 else "b")
 
-            if a == 0:
-                pcardlist = playercardlist.copy()
-                pcardlist.append(game.deck.pop())
-                util[a] = self.cfr(game, nextHistory, p0 * strategy[a], pcardlist)
-                nodeUtil += strategy[a] * util[a]
-            else:
-                pcardlist1 = playercardlist.copy()
-                util[a] = self.cfr(game, nextHistory, p0 * strategy[a], pcardlist1)
-                nodeUtil += strategy[a] * util[a]
+            match player:
+                case 0:
+                    util[a] = self.cfr(game, nextHistory, p0 * strategy[a], p1, p2, p3)
+                case 1:
+                    util[a] = self.cfr(game, nextHistory, p0, p1 * strategy[a], p2, p3)
+                case 2:
+                    util[a] = self.cfr(game, nextHistory, p0, p1, p2 * strategy[a], p3)
+                case 3:
+                    util[a] = self.cfr(game, nextHistory, p0, p1, p2, p3 * strategy[a])
+
+            nodeUtil += strategy[a] * util[a]
+
         """For each action, compute and accumulate counterfactual regret. """
         for a in range(self.NUM_ACTIONS):
             regret: float = util[a] - nodeUtil
