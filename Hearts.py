@@ -169,63 +169,19 @@ class BJTrainer:
         self, game: HeartsGame, history: str, p0: float, playercardlist: list
     ) -> float:
         """Counterfactual regret minimization iteration."""
-        playersum = game.HandEvaluation2(playercardlist)
+        gaining_player, pile_value = game.EvalutatePile()
 
         # player =1 is the dealer, player =0 is the player, deck[0] is the unknown card, deck[1:3] is the known card
         # if history == "":
-        infoSet: str = f"{game.dealer_cards[1][0]} {playersum} "
+        infoSet: str = f"{gaining_player} {pile_value} "
         # else:
         #     infoSet: str = f"{game.dealer_cards[1][0]} {game.player_cards[0][0]} {game.player_cards[1][0]} {playersum} {history}"
 
         """Return payoff for terminal states. """
         """player has black jack, if dealer has black jack, return 0, else return 1"""
-        if (
-            game.player_cards[0][0] in ["K", "Q", "J"]
-            and game.player_cards[1][0] in ["A"]
-        ) or (
-            game.player_cards[0][0] in ["A"]
-            and game.player_cards[1][0] in ["K", "Q", "J"]
-        ):
-            if not (
-                (
-                    game.dealer_cards[1][0] in ["A"]
-                    and game.dealer_cards[0][0] in ["K", "Q", "J"]
-                )
-                or (
-                    game.dealer_cards[1][0] in ["K", "Q", "J"]
-                    and game.dealer_cards[0][0] in ["A"]
-                )
-            ):
-                print("player bj")
-                return 1
-            else:
-                print("tie")
-                return 0
+        
+        return (16 - pile_value) / 16
 
-        if (
-            game.dealer_cards[0][0] in ["K", "Q", "J"]
-            and game.dealer_cards[1][0] in ["A"]
-        ) or (
-            game.dealer_cards[0][0] in ["A"]
-            and game.dealer_cards[1][0] in ["K", "Q", "J"]
-        ):
-            print("dealer bj")
-            return -1
-
-        if playersum > 21:
-            print("boom", playersum, history)
-            return -1
-
-        if len(history) > 0 and history[-1] == "P":
-            """compare the sum of player and dealer"""
-            dealersum = game.dealerdraw()
-            print("dealer sum:", dealersum, "player sum:", playersum, history)
-            if playersum > dealersum:
-                return 1
-            elif playersum == dealersum:
-                return 0
-            else:
-                return -1
 
         """Get information set node or create it if nonexistant. """
         node = self.nodeMap.get(infoSet)
@@ -237,6 +193,7 @@ class BJTrainer:
             node = self.Node()
             node.infoSet = infoSet
             self.nodeMap[infoSet] = node
+            
 
         """For each action, recursively call cfr with additional history and probability. """
         strategy: float = node.getStrategy(p0)
@@ -249,11 +206,11 @@ class BJTrainer:
             if a == 0:
                 pcardlist = playercardlist.copy()
                 pcardlist.append(game.deck.pop())
-                util[a] = -self.cfr(game, nextHistory, p0 * strategy[a], pcardlist)
+                util[a] = self.cfr(game, nextHistory, p0 * strategy[a], pcardlist)
                 nodeUtil += strategy[a] * util[a]
             else:
                 pcardlist1 = playercardlist.copy()
-                util[a] = -self.cfr(game, nextHistory, p0 * strategy[a], pcardlist1)
+                util[a] = self.cfr(game, nextHistory, p0 * strategy[a], pcardlist1)
                 nodeUtil += strategy[a] * util[a]
         """For each action, compute and accumulate counterfactual regret. """
         for a in range(self.NUM_ACTIONS):
@@ -264,9 +221,9 @@ class BJTrainer:
 
 
 def main():
-    #iterations: int = 10000
-    #trainer: BJTrainer = BJTrainer()
-    #trainer.train(iterations)
+    iterations: int = 10000
+    trainer: BJTrainer = BJTrainer()
+    trainer.train(iterations)
     #game = HeartsGame()
     #game.PlayerGame()
 
