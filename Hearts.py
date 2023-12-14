@@ -1,5 +1,4 @@
-import random
-from random import random, shuffle
+from random import shuffle
 import numpy as np
 from typing import List
 
@@ -20,9 +19,10 @@ def DeckCreator():
 class HeartsGame:
     def __init__(self):
         self.deck = None
+        self.observations = None
         self.player_cards = [{"S": set(), "C": set(), "H": set(), "D": set()} for _ in range(4)]
-        self.player_trick_value = [0] * 4
-        self.player_scores = [0] * 4
+        self.player_trick_value = [0, 0, 0, 0]
+        self.player_scores = [0, 0, 0, 0]
         self.current_pile = []
         self.current_suit = None
         self.first_player = 0
@@ -33,59 +33,71 @@ class HeartsGame:
         self.Shuffle()
         for i in range(4):
             for j in range(13):
-                card = self.deck.pop()
-                if card[1] == "C" and card[0] == 2:
+                val, suit = self.deck.pop()
+                if suit == "C" and val == 2:
                     self.first_player = i
-                self.player_cards[i][card[1]].add(card[0])
+                self.player_cards[i][suit].add(val)
+                self.observations[i][DICT1[suit] * 13 + val + 106] = 1
         self.heart_broken = False
 
     def Shuffle(self):
         self.deck = DeckCreator()
+        self.observations = [np.zeros(160, dtype=float) for _ in range(4)]
+        # 52 for cards have been played, 52 for cards in current trick, 4 for current suit, 52 for cards in hand
 
     def PlayAction(self, player, card) -> bool:
         # play a card from the player's hand
-        if card[0] not in self.player_cards[player][card[1]]:
+        val, suit = card
+        if val not in self.player_cards[player][suit]:
             print("Card not in player's hand")
             return False
         if self.current_suit is None:
-            if card[1] == "H" and not self.heart_broken:
+            if suit == "H" and not self.heart_broken and (self.player_cards[player]["S"] or self.player_cards[player]["C"] or self.player_cards[player]["D"]):
                 print("Cannot play heart because heart is not broken")
                 return False
-            self.current_suit = card[1]
-        elif self.player_cards[player][self.current_suit] and card[1] != self.current_suit:
+            self.current_suit = suit
+            for i in range(4):
+                self.observations[i][DICT1[suit] + 104] = 1
+        elif self.player_cards[player][self.current_suit] and suit != self.current_suit:
             print("You must follow the suit")
             return False
-        if card[1] == "H":
+        if suit == "H":
             self.heart_broken = True
-        self.player_cards[player][card[1]].remove(card[0])
+        self.player_cards[player][suit].remove(val)
+        self.observations[player][DICT1[suit] * 13 + val + 106] = 0
         self.current_pile.append((player, card))
+        for i in range(4):
+            self.observations[i][DICT1[suit] * 13 + val - 2] = 1
+            self.observations[i][DICT1[suit] * 13 + val + 50] = 1
         return True
 
-    def PassCards(self, player, threecards):
-        # pass cards to the left
-        for card in threecards:
-            self.player_cards[player][card[1]].remove(card[0])
-            self.player_cards[(player + 1) % 4][card[1]].add(card[0])
+    # def PassCards(self, player, threecards):
+    #     # pass cards to the left
+    #     for card in threecards:
+    #         self.player_cards[player][card[1]].remove(card[0])
+    #         self.player_cards[(player + 1) % 4][card[1]].add(card[0])
 
     def EvaluatePile(self):
         winning_player = 0
         winning_value = 0
         pile_value = 0
 
-        for player, card in self.current_pile:
-            if card[1] == self.current_suit and card[0] > winning_value:
+        for player, (val, suit) in self.current_pile:
+            if suit == self.current_suit and val > winning_value:
                 winning_player = player
-                winning_value = card[0]
-            if card[1] == "H":
+                winning_value = val
+            if suit == "H":
                 pile_value += 1
-            elif card[1] == "S" and card[0] == 12:
+            elif suit == "S" and val == 12:
                 pile_value += 13
-
+            for i in range(4):
+                self.observations[i][DICT1[suit] * 13 + val + 50] = 0
+        for i in range(4):
+            self.observations[i][DICT1[self.current_suit] + 104] = 0
         self.player_trick_value[winning_player] += pile_value
         self.first_player = winning_player
         self.current_pile = []
         self.current_suit = None
-
         return winning_player, pile_value
 
     def UpdateScores(self):
@@ -97,7 +109,6 @@ class HeartsGame:
             self.player_trick_value[i] = 0
 
     # ------------------------------------------------------
-    # ？ what are these 2 function doing ？
     def PlayerInput(self, player):
         while True:
             print("Current Player: " + str(player))
@@ -120,32 +131,29 @@ class HeartsGame:
 
     # ------------------------------------------------------
 
-    def GetAvailableAction(self, player, isFirst=False) -> np.ndarray:
-        strategy = np.full(52, 0, dtype=float)
-        if isFirst:
-            strategy[DICT1["C"] * 13] = 1  # The first must play 2C
+    def GetAvailableAction(self, player, is_first=False) -> List[int]:
+        strategy = []
+        if is_first:
+            strategy.append(DICT1["C"] * 13)  # The first must play 2C
             return strategy
         if self.current_suit is None:
-            for s in DICT1:
-                if s == "H" and not self.heart_broken:
+            for suit in DICT1:
+                if suit == "H" and not self.heart_broken and (self.player_cards[player]["S"] or self.player_cards[player]["C"] or self.player_cards[player]["D"]):
                     continue
-                for card in self.player_cards[player][s]:
-                    strategy[DICT1[s] * 13 + card - 2] = 1
+                for val in self.player_cards[player][suit]:
+                    strategy.append(DICT1[suit] * 13 + val - 2)
             return strategy
         if self.player_cards[player][self.current_suit]:
-            for card in self.player_cards[player][self.current_suit]:
-                strategy[DICT1[self.current_suit] * 13 + card - 2] = 1
+            for val in self.player_cards[player][self.current_suit]:
+                strategy.append(DICT1[self.current_suit] * 13 + val - 2)
             return strategy
-        for s in DICT1:
-            for card in self.player_cards[player][s]:
-                strategy[DICT1[s] * 13 + card - 2] = 1
+        for suit in DICT1:
+            for val in self.player_cards[player][suit]:
+                strategy.append(DICT1[suit] * 13 + val - 2)
         return strategy
 
 
 def main():
-    iterations: int = 10000
-    # trainer: BJTrainer = BJTrainer()
-    # trainer.train(iterations)
     game = HeartsGame()
     game.PlayerGame()
 
