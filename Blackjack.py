@@ -212,7 +212,7 @@ class BJTrainer:
             if a == 0:
                 pcardlist.append(game.deck.pop())
                 next_history += f"({pcardlist[-1][:-1]})"
-            util[a] = -self.cfr(game, next_history, float(p0 * strategy[a]), pcardlist)
+            util[a] = self.cfr(game, next_history, float(p0 * strategy[a]), pcardlist)
             node_util += strategy[a] * util[a]
 
         """For each action, compute and accumulate counterfactual regret. """
