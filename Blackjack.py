@@ -142,7 +142,7 @@ class BJTrainer:
             game.initial()
             util += self.cfr(game, f"({game.player_cards[0][:-1]})({game.player_cards[1][:-1]})", 1, game.player_cards.copy())
 
-        with open("output_file", "w") as file:
+        with open("bj_output_file", "w") as file:
             for n in self.nodeMap.values():
                 file.write(str(n) + "\n")
 
